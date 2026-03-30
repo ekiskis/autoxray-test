@@ -904,15 +904,6 @@ OUT_WS='{
   echo "]"
 ) | envsubst > "$WEB_PATH/$path_subpage.json"
 
-{
-  echo "$linkRTY2"
-  echo "$linkRTY1"
-  echo "$linkTLS1"
-  echo "$linkTLS2"
-  echo "$linkTLS3"
-  echo "$linkTLS4"
-} > "$WEB_PATH/$path_subpage"
-
 systemctl restart xray
 echo -e "Перезапуск XRAY"
 
@@ -935,6 +926,16 @@ linkTLS3="vless://${xray_uuid_vrv}@$DOMAIN:8443?security=tls&type=ws&headerType=
 linkTLS4="vless://${xray_uuid_vrv}@$DOMAIN:8443?security=tls&type=grpc&headerType=&serviceName=${path_xhttp}11&host=&sni=$DOMAIN&fp=chrome&spx=%2F#🇪🇺 VLESS gRPC TLS"
 
 configListLink="https://$DOMAIN/$path_subpage.html"
+
+{
+  echo "$linkRTY2"
+  echo "$linkRTY1"
+  echo "$linkTLS1"
+  echo "$linkTLS2"
+  echo "$linkTLS3"
+  echo "$linkTLS4"
+} > "$WEB_PATH/$path_subpage"
+
 
 CONFIGS_ARRAY=(
     "VLESS XHTTP REALITY EXTRA|$linkRTY2"
@@ -1140,7 +1141,7 @@ ${YEL}Ваша json страничка подписки ${NC}
 $subPageLink
 
 ${YEL}Ваша vless подписка ${NC}
-$subPageLink
+$sub2PageLink
 
 ${YEL}Ссылка на ваш сайт(вся важная информация там) ${NC}
 ${GRN}$configListLink ${NC}
