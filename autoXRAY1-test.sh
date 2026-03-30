@@ -6,7 +6,7 @@ RED='\033[1;31m'
 YEL='\033[1;33m'
 NC='\033[0m' # No Color
 
-echo -e "${GRN}Версия: 111 ${NC}"
+echo -e "${GRN}Версия: 1.0.0r ${NC}"
 
 [[ $EUID -eq 0 ]] || { echo -e "${RED}❌ скрипту нужны root права ${NC}"; exit 1; }
 
@@ -911,8 +911,6 @@ OUT_WS='{
   echo "$linkTLS2"
   echo "$linkTLS3"
   echo "$linkTLS4"
-  echo "$SOCKS5_url"
-  echo "$MTProto"
 } > "$WEB_PATH/$path_subpage"
 
 systemctl restart xray
@@ -921,24 +919,25 @@ echo -e "Перезапуск XRAY"
 # Формирование ссылок
 subPageLink="https://$DOMAIN/$path_subpage.json"
 
+sub2PageLink="https://$DOMAIN/$path_subpage"
+
 # Формирование ссылок
-linkRTY1="vless://${xray_uuid_vrv}@$DOMAIN:443?security=reality&type=tcp&headerType=&path=&host=&flow=xtls-rprx-vision&sni=$DOMAIN&fp=chrome&pbk=${xray_publicKey_vrv}&sid=${xray_shortIds_vrv}&spx=%2F#vlessRAWrealityVISION-autoXRAY"
+linkRTY1="vless://${xray_uuid_vrv}@$DOMAIN:443?security=reality&type=tcp&headerType=&path=&host=&flow=xtls-rprx-vision&sni=$DOMAIN&fp=chrome&pbk=${xray_publicKey_vrv}&sid=${xray_shortIds_vrv}&spx=%2F#🇪🇺 VLESS RAW REALITY VISION"
 
-linkRTY2="vless://${xray_uuid_vrv}@$DOMAIN:443?security=reality&type=xhttp&headerType=&path=%2F$path_xhttp&host=&mode=stream-one&extra=%7B%22xmux%22%3A%7B%22cMaxReuseTimes%22%3A%221000-3000%22%2C%22maxConcurrency%22%3A%223-5%22%2C%22maxConnections%22%3A0%2C%22hKeepAlivePeriod%22%3A0%2C%22hMaxRequestTimes%22%3A%22400-700%22%2C%22hMaxReusableSecs%22%3A%221200-1800%22%7D%2C%22headers%22%3A%7B%7D%2C%22noGRPCHeader%22%3Afalse%2C%22xPaddingBytes%22%3A%22400-800%22%2C%22scMaxEachPostBytes%22%3A1500000%2C%22scMinPostsIntervalMs%22%3A20%2C%22scStreamUpServerSecs%22%3A%2260-240%22%7D&sni=$DOMAIN&fp=chrome&pbk=${xray_publicKey_vrv}&sid=${xray_shortIds_vrv}&spx=%2F#vlessXHTTPrealityEXTRA-autoXRAY"
+linkRTY2="vless://${xray_uuid_vrv}@$DOMAIN:443?security=reality&type=xhttp&headerType=&path=%2F$path_xhttp&host=&mode=stream-one&extra=%7B%22xmux%22%3A%7B%22cMaxReuseTimes%22%3A%221000-3000%22%2C%22maxConcurrency%22%3A%223-5%22%2C%22maxConnections%22%3A0%2C%22hKeepAlivePeriod%22%3A0%2C%22hMaxRequestTimes%22%3A%22400-700%22%2C%22hMaxReusableSecs%22%3A%221200-1800%22%7D%2C%22headers%22%3A%7B%7D%2C%22noGRPCHeader%22%3Afalse%2C%22xPaddingBytes%22%3A%22400-800%22%2C%22scMaxEachPostBytes%22%3A1500000%2C%22scMinPostsIntervalMs%22%3A20%2C%22scStreamUpServerSecs%22%3A%2260-240%22%7D&sni=$DOMAIN&fp=chrome&pbk=${xray_publicKey_vrv}&sid=${xray_shortIds_vrv}&spx=%2F#🇪🇺 VLESS XHTTP REALITY EXTRA"
 
-linkTLS1="vless://${xray_uuid_vrv}@$DOMAIN:8443?security=tls&type=tcp&headerType=&path=&host=&flow=xtls-rprx-vision&sni=$DOMAIN&fp=chrome&spx=%2F#vlessRAWtlsVision-autoXRAY"
+linkTLS1="vless://${xray_uuid_vrv}@$DOMAIN:8443?security=tls&type=tcp&headerType=&path=&host=&flow=xtls-rprx-vision&sni=$DOMAIN&fp=chrome&spx=%2F#🇪🇺 VLESS RAW TLS VISION"
 
+linkTLS2="vless://${xray_uuid_vrv}@$DOMAIN:8443?security=tls&type=xhttp&headerType=&path=%2F${path_xhttp}&host=&mode=auto&extra=%7B%22xmux%22%3A%7B%22cMaxReuseTimes%22%3A%221000-3000%22%2C%22maxConcurrency%22%3A%223-5%22%2C%22maxConnections%22%3A0%2C%22hKeepAlivePeriod%22%3A0%2C%22hMaxRequestTimes%22%3A%22400-700%22%2C%22hMaxReusableSecs%22%3A%221200-1800%22%7D%2C%22headers%22%3A%7B%7D%2C%22noGRPCHeader%22%3Afalse%2C%22xPaddingBytes%22%3A%22400-800%22%2C%22scMaxEachPostBytes%22%3A1500000%2C%22scMinPostsIntervalMs%22%3A20%2C%22scStreamUpServerSecs%22%3A%2260-240%22%7D&sni=$DOMAIN&fp=chrome&spx=%2F#🇪🇺 VLESS XHTTP TLS EXTRA"
 
-linkTLS2="vless://${xray_uuid_vrv}@$DOMAIN:8443?security=tls&type=xhttp&headerType=&path=%2F${path_xhttp}&host=&mode=auto&extra=%7B%22xmux%22%3A%7B%22cMaxReuseTimes%22%3A%221000-3000%22%2C%22maxConcurrency%22%3A%223-5%22%2C%22maxConnections%22%3A0%2C%22hKeepAlivePeriod%22%3A0%2C%22hMaxRequestTimes%22%3A%22400-700%22%2C%22hMaxReusableSecs%22%3A%221200-1800%22%7D%2C%22headers%22%3A%7B%7D%2C%22noGRPCHeader%22%3Afalse%2C%22xPaddingBytes%22%3A%22400-800%22%2C%22scMaxEachPostBytes%22%3A1500000%2C%22scMinPostsIntervalMs%22%3A20%2C%22scStreamUpServerSecs%22%3A%2260-240%22%7D&sni=$DOMAIN&fp=chrome&spx=%2F#vlessXHTTPtls-autoXRAY"
+linkTLS3="vless://${xray_uuid_vrv}@$DOMAIN:8443?security=tls&type=ws&headerType=&path=%2F${path_xhttp}22&host=&sni=$DOMAIN&fp=chrome&spx=%2F#🇪🇺 VLESS WS TLS"
 
-linkTLS3="vless://${xray_uuid_vrv}@$DOMAIN:8443?security=tls&type=ws&headerType=&path=%2F${path_xhttp}22&host=&sni=$DOMAIN&fp=chrome&spx=%2F#vlessWStls-autoXRAY"
-
-linkTLS4="vless://${xray_uuid_vrv}@$DOMAIN:8443?security=tls&type=grpc&headerType=&serviceName=${path_xhttp}11&host=&sni=$DOMAIN&fp=chrome&spx=%2F#vlessGRPCtls-autoXRAY"
+linkTLS4="vless://${xray_uuid_vrv}@$DOMAIN:8443?security=tls&type=grpc&headerType=&serviceName=${path_xhttp}11&host=&sni=$DOMAIN&fp=chrome&spx=%2F#🇪🇺 VLESS gRPC TLS"
 
 configListLink="https://$DOMAIN/$path_subpage.html"
 
 CONFIGS_ARRAY=(
-    "VLESS XHTTP REALITY EXTRA (для моста)|$linkRTY2"
+    "VLESS XHTTP REALITY EXTRA|$linkRTY2"
     "VLESS RAW REALITY VISION|$linkRTY1"
 	"VLESS RAW TLS VISION|$linkTLS1"
 	"VLESS XHTTP TLS EXTRA|$linkTLS2"
@@ -969,12 +968,20 @@ EOF
 # --- ЗАПИСЬ BODY (ДИНАМИЧЕСКИЕ ДАННЫЕ) ---
 cat >> "$WEB_PATH/$path_subpage.html" <<EOF
 
-<h2>📂 Ссылка на подписку (готовый конфиг клиента с роутингом)</h2>
+<h2>📂 Ссылка на подписку (готовый конфиг клиента с роутингом для happ)</h2>
 <div class="config-row">
     <div class="config-label">Subscription</div>
     <div class="config-code" id="subLink">$subPageLink</div>
     <button class="btn-action copy-btn" onclick="copyText('subLink', this)">Copy</button>
     <button class="btn-action qr-btn" onclick="showQR('subLink')">QR</button>
+</div>
+
+<h2>📂 Ссылка на подписку (чистый vless для v2rayN и подобных)</h2>
+<div class="config-row">
+    <div class="config-label">Subscription</div>
+    <div class="config-code" id="subLinkVless">$sub2PageLink</div>
+    <button class="btn-action copy-btn" onclick="copyText('subLinkVless', this)">Copy</button>
+    <button class="btn-action qr-btn" onclick="showQR('subLinkVless')">QR</button>
 </div>
 
 
@@ -986,6 +993,12 @@ cat >> "$WEB_PATH/$path_subpage.html" <<EOF
 </div>
 <p>Маршрутизацию нужно выключить, она тут встроенная. По умолчанию она выключена - включается, если вы пользовались сторонними сервисами.</p>
 
+<h2>📱 Приложения v2rayN и v2rayNG(Windows/MAC/Linux и Adnroid)</h2>
+
+<div class="btn-group">
+    <a href="https://github.com/2dust/v2rayn" target="_blank" class="btn download">⬇️ Download v2rayN</a>
+    <a href="https://github.com/2dust/v2rayng" target="_blank" class="btn download">⬇️ Download v2rayNG</a>   
+</div>
 
 <h2>➡️ Конфиги</h2>
 EOF
@@ -1027,14 +1040,56 @@ cat >> "$WEB_PATH/$path_subpage.html" <<EOF
     <a href="${MTProto}" target="_blank" class="btn-action qr-btn" title="автодобавление моста в тг" style="text-decoration:none">✈️ Add to TG</a>
 </div>
 
-<h2>💠 Все конфиги вместе</h2>
+<h2>💠 Все конфиги вместе </h2>
 <div class="config-row">
     <div class="config-code" id="cAll" style="max-height:60px;white-space:pre-wrap;word-break:break-all">$ALL_LINKS_TEXT</div>
     <button class="btn-action copy-btn" onclick="copyText('cAll', this)">Copy ALL</button>
     <button class="btn-action qr-btn" onclick="showQR('cAll')">QR</button>
 </div>
 
-<div><a style="color:white;margin:40px auto 20px;display:block;text-align:center;" href="https://github.com/xVRVx/autoXRAY">https://github.com/xVRVx/autoXRAY</a></div>
+<style>
+    .info-section {
+        background: #1e1e1e;
+        border: 1px dashed #555;
+        border-radius: 8px;
+        padding: 15px;
+        margin-top: 30px;
+        line-height: 1.6;
+        font-size: 13px;
+    }
+    .info-section h3 {
+        color: #82aaff;
+        margin-top: 0;
+        font-size: 16px;
+        border-bottom: 1px solid #333;
+        padding-bottom: 8px;
+    }
+    .info-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+    .info-list li {
+        margin-bottom: 8px;
+    }
+    .info-list b {
+        color: #c3e88d;
+    }
+</style>
+
+<div class="info-section">
+    <h3>ℹ️ Описание конфигураций</h3>
+    <ul class="info-list">
+        <li><b>VLESS XHTTP Reality EXTRA (443 порт)</b> — продвинутые настройки, повышенная нагрузка на CPU.</li>
+        <li><b>VLESS RAW Reality VISION (443 порт)</b> — хорошая маскировка, очень быстрый.</li>
+        <li><b>VLESS RAW TLS VISION</b> — стандартный протокол на 8443 порту.</li>
+        <li><b>VLESS XHTTP TLS EXTRA</b> — стабильный вариант на 8443 порту.</li>
+        <li><b>VLESS WS TLS</b> — работа через WebSocket на 8443 порту.</li>
+        <li><b>VLESS GRPC TLS</b> — работа через gRPC на 8443 порту.</li>
+        <li><b>Socks5 прокси (10443 порт)</b> — используйте для мессенджеров (например, Telegram).</li>
+        <li><b>MTProtoFakeTLS (443 порт)</b> — устойчивый к блокировкам прокси для Telegram</li>
+    </ul>
+</div>
 
 <div id="qrModal" class="modal-overlay"><div class="modal-content"><div id="qrcode"></div><button class="close-modal-btn" onclick="closeModal()">Close</button></div></div>
 </body></html>
@@ -1072,29 +1127,26 @@ echo -e "
 ${YEL}MTProto FakeTLS для ТГ${NC}
 $MTProto
 
-${YEL}VLESS XHTTP REALITY EXTRA (для моста) ${NC}
+${YEL}VLESS XHTTP REALITY EXTRA ${NC}
 $linkRTY2
 
 ${YEL}VLESS RAW REALITY VISION ${NC}
 $linkRTY1
 
 ${YEL}VLESS XHTTP TLS EXTRA ${NC}
-$linkRTY2
+$linkTLS2
 
 ${YEL}Ваша json страничка подписки ${NC}
 $subPageLink
 
-${YEL}Ссылка на сохраненные конфиги ${NC}
-${GRN}$configListLink ${NC}
+${YEL}Ваша vless подписка ${NC}
+$subPageLink
 
-Скопируйте подписку в специализированное приложение:
-- iOS: Happ или v2RayTun или v2rayN
-- Android: Happ или v2RayTun или v2rayNG
-- Windows: конфиги Happ или winLoadXRAY или v2rayN
-	для vless v2RayTun или Throne
+${YEL}Ссылка на ваш сайт(вся важная информация там) ${NC}
+${GRN}$configListLink ${NC}
 
 Открыт локальный socks5 на порту 10808, 2080 и http на 10809.
 
-${GRN}Поддержать автора: https://github.com/xVRVx/autoXRAY ${NC}
+${GRN}Поддержать автора оригинального скрипта: https://github.com/xVRVx/autoXRAY ${NC}
 
 "
