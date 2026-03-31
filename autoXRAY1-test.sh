@@ -29,6 +29,8 @@ usermod -aG sudo "$USER_NAME"
 echo -e "${GRN}✅ Пользователь $USER_NAME создан со случайным паролем.${NC}"
 # --- БЛОК СОЗДАНИЯ ПОЛЬЗОВАТЕЛЯ END ---
 
+
+
 # --- БЛОК БЕЗОПАСНОСТИ START ---
 echo -e "${YEL}Настройка безопасности (Fail2Ban & UFW)...${NC}"
 
@@ -40,7 +42,7 @@ apt-get install tree rsyslog fail2ban ufw -y
 SSH_PORT=$(shuf -i 20000-39999 -n 1)
 echo -e "${GRN}Новый порт SSH: $SSH_PORT${NC}"
 
-# 1. Смена порта в классическом конфиге sshd
+# 1. Смена порта и входа по руту через SSH
 sed -i "s/^#\?Port .*/Port $SSH_PORT/" /etc/ssh/sshd_config
 sed -i "s/^#\?PermitRootLogin .*/PermitRootLogin no/" /etc/ssh/sshd_config
 
@@ -89,6 +91,7 @@ ufw allow 8442
 ufw allow 8443
 ufw allow 10443
 echo "y" | ufw enable
+sleep 1
 
 echo -e "${GRN}✅ Fail2Ban и UFW настроены и запущены.${NC}"
 # --- БЛОК БЕЗОПАСНОСТИ END ---
@@ -152,6 +155,9 @@ bash -c "$(curl -L https://github.com/xVRVx/autoXRAY/raw/refs/heads/main/test/ge
 
 # Установка Xray
 bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install
+
+
+
 
 # Блок CERTBOT - START
 
@@ -221,8 +227,10 @@ else
 fi
 # Блок CERTBOT - END
 
-# конфиг nginx
 
+
+
+# конфиг nginx
 path_xhttp=$(openssl rand -base64 15 | tr -dc 'a-z0-9' | head -c 6)
 
 bash -c "cat > $CONFIG_PATH" <<EOF
@@ -1100,7 +1108,6 @@ for item in "${CONFIGS_ARRAY[@]}"; do
     <div class="config-label">$title</div>
     <div class="config-code" id="c$idx">$link</div>
     <button class="btn-action copy-btn" onclick="copyText('c$idx', this)">Copy</button>
-    <button class="btn-action qr-btn" onclick="showQR('c$idx')">QR</button>
 </div>
 EOF
     ((idx++))
@@ -1128,7 +1135,6 @@ cat >> "$WEB_PATH/$path_subpage.html" <<EOF
 <div class="config-row">
     <div class="config-code" id="cAll" style="max-height:60px;white-space:pre-wrap;word-break:break-all">$ALL_LINKS_TEXT</div>
     <button class="btn-action copy-btn" onclick="copyText('cAll', this)">Copy ALL</button>
-    <button class="btn-action qr-btn" onclick="showQR('cAll')">QR</button>
 </div>
 
 <style>
