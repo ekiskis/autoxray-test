@@ -10,6 +10,89 @@ echo -e "${GRN}Версия: 1.0.0r ${NC}"
 
 [[ $EUID -eq 0 ]] || { echo -e "${RED}❌ скрипту нужны root права ${NC}"; exit 1; }
 
+# --- БЛОК СОЗДАНИЯ ПОЛЬЗОВАТЕЛЯ START ---
+# 1. Генерация данных
+RAND_SUFFIX=$(openssl rand -hex 3)
+USER_NAME="user_$RAND_SUFFIX"
+USER_PASS=$(openssl rand -hex 16)
+
+# 2. Создание пользователя
+# -m создаст домашнюю директорию, -s задаст оболочку
+useradd -m -s /bin/bash "$USER_NAME"
+
+# 3. Установка пароля (АВТОМАТИЧЕСКИ)
+echo "$USER_NAME:$USER_PASS" | chpasswd
+
+# 4. Добавление в группу sudo
+usermod -aG sudo "$USER_NAME"
+
+echo -e "${GRN}✅ Пользователь $USER_NAME создан со случайным паролем.${NC}"
+# --- БЛОК СОЗДАНИЯ ПОЛЬЗОВАТЕЛЯ END ---
+
+# --- БЛОК БЕЗОПАСНОСТИ START ---
+echo -e "${YEL}Настройка безопасности (Fail2Ban & UFW)...${NC}"
+
+# Установка необходимых пакетов
+apt-get update
+apt-get install tree rsyslog fail2ban ufw -y
+
+# Генерируем случайный порт для SSH (от 20000 до 40000)
+SSH_PORT=$(shuf -i 20000-40000 -n 1)
+echo -e "${GRN}Новый порт SSH: $SSH_PORT${NC}"
+
+# 1. Смена порта в классическом конфиге sshd
+sed -i "s/^#\?Port .*/Port $SSH_PORT/" /etc/ssh/sshd_config
+sed -i "s/^#\?PermitRootLogin .*/PermitRootLogin no/" /etc/ssh/sshd_config
+
+# 2. Настройка systemd ssh.socket
+mkdir -p /etc/systemd/system/ssh.socket.d/
+cat <<EOF > /etc/systemd/system/ssh.socket.d/override.conf
+[Socket]
+ListenStream=
+ListenStream=$SSH_PORT
+EOF
+
+# 3. Настройка Fail2Ban с учетом нового порта
+cat <<EOF > /etc/fail2ban/jail.local
+[DEFAULT]
+bantime = 24h
+findtime = 10m
+maxretry = 2
+
+[sshd]
+enabled = true
+port = $SSH_PORT
+filter = sshd
+logpath = /var/log/auth.log
+maxretry = 2
+bantime = 24h
+findtime = 10m
+EOF
+
+systemctl daemon-reload
+sleep 1
+systemctl restart rsyslog
+sleep 1
+systemctl restart ssh
+sleep 1
+systemctl restart fail2ban
+sleep 1
+systemctl enable fail2ban
+sleep 1
+
+# Настройка UFW
+ufw allow OpenSSH
+ufw allow $SSH_PORT/tcp
+ufw allow 80
+ufw allow 443
+ufw allow 8442
+ufw allow 8443
+ufw allow 10443
+echo "y" | ufw enable
+
+echo -e "${GRN}✅ Fail2Ban и UFW настроены и запущены.${NC}"
+# --- БЛОК БЕЗОПАСНОСТИ END ---
+
 DOMAIN=$1
 
 if [ -z "$DOMAIN" ]; then
@@ -1145,6 +1228,17 @@ $sub2PageLink
 
 ${YEL}Ссылка на ваш сайт(вся важная информация там) ${NC}
 ${GRN}$configListLink ${NC}
+
+${GRN}Новый порт SSH: $SSH_PORT${NC}
+${YEL}========================================
+   🔐 ДАННЫЕ НОВОГО ПОЛЬЗОВАТЕЛЯ
+========================================
+Пользователь:  ${GRN}$USER_NAME${NC}
+Пароль:        ${GRN}$USER_PASS${NC}
+========================================${NC}
+
+Команда для входа:
+${YEL}ssh $USER_NAME@$DOMAIN -p $SSH_PORT${NC}
 
 Открыт локальный socks5 на порту 10808, 2080 и http на 10809.
 
