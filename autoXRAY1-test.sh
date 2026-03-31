@@ -324,7 +324,7 @@ xray_shortIds_vrv=$(openssl rand -hex 8)
 # xray_sspasw_vrv=$(openssl rand -base64 15 | tr -dc 'A-Za-z0-9' | head -c 20)
 xray_sspasw_vrv=$(openssl rand -base64 32)
 
-path_subpage=$(openssl rand -base64 15 | tr -dc 'A-Za-z0-9' | head -c 20)
+path_subpage=$(openssl rand -base64 40 | tr -dc 'A-Za-z0-9' | head -c 40)
 
 # ipserv=$(hostname -I | awk '{print $1}')
 
