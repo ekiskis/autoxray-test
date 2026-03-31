@@ -36,8 +36,8 @@ echo -e "${YEL}Настройка безопасности (Fail2Ban & UFW)...${
 apt-get update
 apt-get install tree rsyslog fail2ban ufw -y
 
-# Генерируем случайный порт для SSH (от 20000 до 40000)
-SSH_PORT=$(shuf -i 20000-40000 -n 1)
+# Генерируем случайный порт для SSH (от 20000 до 39000)
+SSH_PORT=$(shuf -i 20000-39999 -n 1)
 echo -e "${GRN}Новый порт SSH: $SSH_PORT${NC}"
 
 # 1. Смена порта в классическом конфиге sshd
