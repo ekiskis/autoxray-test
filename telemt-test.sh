@@ -35,7 +35,7 @@ client_ack = 300
 [server.api]
 enabled = true
 listen = "127.0.0.1:9091"
-whitelist = ["127.0.0.1/32", "$LOCAL_IP"]
+# whitelist = ["127.0.0.1/32"]
 # read_only = true
 
 # === Anti-Censorship & Masking ===
@@ -94,4 +94,6 @@ systemctl start telemt
 systemctl enable telemt
 
 sleep 3
-MTProto=$(curl -s http://127.0.0.1:9091/v1/users | jq -r '.data[0].links.tls[0]')
+telemtSecret=$(curl -s http://127.0.0.1:9091/v1/users | jq -r '.data[0].links.tls[0] | split("secret=")[1]')
+
+MTProto="tg://proxy?server=$DOMAIN&port=443&secret=$telemtSecret"
