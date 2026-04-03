@@ -952,8 +952,8 @@ CONFIGS_ARRAY=(
 )
 ALL_LINKS_TEXT=""
 
-echo -e "\n\n${GRN}Устанавливаем MTProto FakeTLS ${NC}"
-source <(curl -sL https://raw.githubusercontent.com/ekiskis/autoxray-test/refs/heads/main/telemt-test.sh)
+# echo -e "\n\n${GRN}Устанавливаем MTProto FakeTLS ${NC}"
+# source <(curl -sL https://raw.githubusercontent.com/ekiskis/autoxray-test/refs/heads/main/telemt-test.sh)
 
 # --- ЗАПИСЬ HEAD (СТАТИКА, МИНИФИЦИРОВАННЫЕ СТИЛИ И JS) ---
 cat > "$WEB_PATH/$path_subpage.html" <<'EOF'
