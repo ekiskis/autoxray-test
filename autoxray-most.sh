@@ -1083,6 +1083,6 @@ ${GRN}$configListLink ${NC}
 
 Открыт локальный socks5 на порту 10808, 2080 и http на 10809.
 
-${GRN}Поддержать автора: https://github.com/xVRVx/autoXRAY ${NC}
+${GRN}Поддержать автора оригинального скрипта: https://github.com/xVRVx/autoXRAY ${NC}
 
 "
