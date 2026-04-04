@@ -1,3 +1,5 @@
+
+## Рекомендованный скрипт
 ```
 bash -c "$(curl -L https://raw.githubusercontent.com/ekiskis/autoxray-test/refs/heads/main/autoxray.sh)" -- поддомен1.Домен.Ком
 ```
@@ -31,7 +33,7 @@ bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release
 1) На заблокированный чистый VPS ставим стандартный рекомендованный скрипт и берем получившийся vless XHTTP reality EXTRA
 2) На ru VPS ставим новый скрипт (здесь нам понадобится vless XHTTP reality EXTRA):
 ```bash
-bash -c "$(curl -L https://raw.githubusercontent.com/xVRVx/autoXRAY/main/autoXRAYselfRUbrEUxhttp.sh)" -- поддомен2.вашДОМЕН.com "vless://вашКонфигXHTTP"
+bash -c "$(curl -L https://raw.githubusercontent.com/ekiskis/autoxray-test/main/autoxray-most.sh)" -- поддомен2.вашДОМЕН.com "vless://вашКонфигXHTTP"
 ```
 Установится прокси мост между серверами, итоговая цепочка: конфиг клиента -> ru VPS -> eu VPS -> зарубежный сайт
 
