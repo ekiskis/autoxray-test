@@ -3,6 +3,7 @@
 ```
 bash -c "$(curl -L https://raw.githubusercontent.com/ekiskis/autoxray-test/refs/heads/main/autoxray.sh)" -- поддомен1.Домен.Ком
 ```
+Предоставлять ссылки на хостинг-провайдеров не буду, так как *** блокирует ip-адреса по /32
 
 
 ## Как удалить скрипт
