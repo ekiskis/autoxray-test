@@ -841,7 +841,7 @@ subPageLink="https://$DOMAIN/$path_subpage.json"
 configListLink="https://$DOMAIN/$path_subpage.html"
 
 echo -e "\n\n${GRN}Устанавливаем MTProto FakeTLS ${NC}"
-source <(curl -sL https://github.com/xVRVx/autoXRAY/raw/refs/heads/main/test/telemt-test.sh)
+source <(curl -sL https://raw.githubusercontent.com/ekiskis/autoxray-test/refs/heads/main/telemt-test.sh)
 
 echo -e "\n\n${GRN}Создаем страницу подписки ${NC}"
 cat > "$WEB_PATH/$path_subpage.html" <<'EOF'
