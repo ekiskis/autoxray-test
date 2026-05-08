@@ -6,110 +6,120 @@ RED='\033[1;31m'
 YEL='\033[1;33m'
 NC='\033[0m' # No Color
 
+echo -e "${GRN}Версия: 222 ${NC}"
+
 [[ $EUID -eq 0 ]] || { echo -e "${RED}❌ скрипту нужны root права ${NC}"; exit 1; }
 
 DOMAIN=$1
-
-vless_url=$2
+shift # Сдвигаем аргументы, теперь все оставшиеся аргументы ($@) — это vless ссылки
+VLESS_URLS=("$@")
 
 if [ -z "$DOMAIN" ]; then
     echo -e "${RED}❌ Ошибка: домен не задан.${NC}"
     exit 1
 fi
 
-if [ -z "$vless_url" ]; then
-    echo "${RED}❌ Ошибка: конфиг vless не задан.${NC}"
+if [ ${#VLESS_URLS[@]} -eq 0 ]; then
+    echo -e "${RED}❌ Ошибка: конфиги vless не заданы. Укажите хотя бы одну vless:// ссылку.${NC}"
     exit 1
 fi
-
-if [[ "$vless_url" != vless://* ]]; then
-    echo "${RED}❌ Ошибка: Неверный формат vless-ссылки.${NC}"
-    exit 1
-fi
-
 
 # Функция URL-декодинга
 urldecode() {
     printf '%b' "${1//%/\\x}"
 }
-url_body="${vless_url#vless://}"
 
-node_name_enc="${url_body##*#}"
-node_nameVL="$(urldecode "$node_name_enc")"
+COUNT=${#VLESS_URLS[@]}
+echo -e "${GRN}Обнаружено $COUNT vless ссылок для моста!${NC}"
 
-url_body="${url_body%%#*}"
+# Массивы для хранения параметров каждой ноды
+declare -a NODE_UUID NODE_ADDR NODE_PORT NODE_NAME NODE_TYPE NODE_SEC NODE_FP NODE_SNI NODE_PBK NODE_SID NODE_SPX NODE_MODE NODE_PATH NODE_EXTRA
+# Уникальные UUID для сервера-моста (RU)
+declare -a BRIDGE_UUID
 
-uuidVL="${url_body%@*}"
-host_port_query="${url_body#*@}"
+# Генерируем базовый UUID сервера для всех подключений (будет один клиент в конфиге сервера)
+SERVER_UUID=$(openssl rand -hex 16 | sed 's/\(........\)\(....\)\(....\)\(....\)\(............\)/\1-\2-\3-\4-\5/')
+# Разбиваем UUID на группы для удобной подмены 3-й группы (7 и 8 байты)
+g1="${SERVER_UUID:0:8}"
+g2="${SERVER_UUID:9:4}"
+g3="${SERVER_UUID:14:4}"
+g4="${SERVER_UUID:19:4}"
+g5="${SERVER_UUID:24:12}"
 
-addressVL="${host_port_query%%:*}"
-restVL="${host_port_query#*:}"
-portVL="${restVL%%\?*}"
+for (( i=0; i<COUNT; i++ )); do
+    url="${VLESS_URLS[$i]}"
+    if [[ "$url" != vless://* ]]; then
+        echo -e "${RED}❌ Ошибка: Неверный формат vless-ссылки: $url${NC}"
+        exit 1
+    fi
 
-query_string="${restVL#*\?}"
+    url_body="${url#vless://}"
+    node_name_enc="${url_body##*#}"
+    NODE_NAME[$i]="$(urldecode "$node_name_enc")"
 
-# Разбор параметров в ассоциативный массив
-declare -A params
-IFS='&' read -ra pairs <<< "$query_string"
-for pair in "${pairs[@]}"; do
-    key="${pair%%=*}"
-    value="${pair#*=}"
-    params["$key"]="$(urldecode "$value")"
+    url_body="${url_body%%#*}"
+    NODE_UUID[$i]="${url_body%@*}"
+    host_port_query="${url_body#*@}"
+
+    NODE_ADDR[$i]="${host_port_query%%:*}"
+    restVL="${host_port_query#*:}"
+    NODE_PORT[$i]="${restVL%%\?*}"
+
+    query_string="${restVL#*\?}"
+
+    # Очищаем массив params
+    unset params
+    declare -A params
+    IFS='&' read -ra pairs <<< "$query_string"
+    for pair in "${pairs[@]}"; do
+        key="${pair%%=*}"
+        value="${pair#*=}"
+        params["$key"]="$(urldecode "$value")"
+    done
+
+    NODE_SEC[$i]="${params[security]}"
+    NODE_TYPE[$i]="${params[type]}"
+    NODE_PATH[$i]="${params[path]}"
+    NODE_MODE[$i]="${params[mode]}"
+    NODE_EXTRA[$i]="${params[extra]}"
+    NODE_SNI[$i]="${params[sni]}"
+    NODE_FP[$i]="${params[fp]}"
+    NODE_PBK[$i]="${params[pbk]}"
+    NODE_SID[$i]="${params[sid]}"
+    NODE_SPX[$i]="${params[spx]}"
+
+    # Встраиваем Vless Route ID (начиная с 1) в 3-ю группу UUID (7 и 8 байты) для клиента
+    ROUTE_ID=$((i + 1))
+    HEX_ROUTE_ID=$(printf "%04x" $ROUTE_ID)
+    BRIDGE_UUID[$i]="${g1}-${g2}-${HEX_ROUTE_ID}-${g4}-${g5}"
 done
 
+# Порт прослушивания сервера-моста (единый для Inbound, обычно 443 для Reality)
+SERVER_PORT=443
 
-# Вывод:
-echo -e "${YEL}== Основное ==${NC}"
-echo "UUID: $uuidVL"
-echo "Address: $addressVL"
-echo "Port: $portVL"
-echo "Node Name: $node_nameVL"
-
-echo ""
-echo -e "${YEL}== Параметры ==${NC}"
-SECURITY="${params[security]}"; echo "SECURITY=$SECURITY"
-TYPE="${params[type]}"; echo "TYPE=$TYPE"
-headerType="${params[headerType]}"; echo "headerType=$headerType"
-path_url="${params[path]}"; echo "path=$path_url"
-host="${params[host]}"; echo "host=$host"
-mode="${params[mode]}"; echo "mode=$mode"
-extra="${params[extra]}"; echo "extra=$extra"
-
-SNI="${params[sni]}"; echo "SNI=$SNI"
-FP="${params[fp]}"; echo "FP=$FP"
-PBK="${params[pbk]}"; echo "PBK=$PBK"
-SID="${params[sid]}"; echo "SID=$SID"
-SPX="${params[spx]}"; echo "SPX=$SPX"
-
-
-# FLOW="${params[flow]}"; echo "FLOW=$FLOW"
-
-
-
-echo "${YEL}Обновление и установка необходимых пакетов...${NC}"
-apt-get update && apt-get install curl jq dnsutils openssl nginx certbot -y
+echo -e "${YEL}Обновление и установка необходимых пакетов...${NC}"
+apt-get update && apt-get install curl jq dnsutils openssl nginx certbot wget tar -y
 systemctl enable --now nginx
 
 LOCAL_IP=$(hostname -I | awk '{print $1}')
-DNS_IP=$(dig +short "$DOMAIN" | grep '^[0-9]')
+DNS_IP=$(dig +short "$DOMAIN" | grep '^[0-9]' | head -n 1)
 
 if [ "$LOCAL_IP" != "$DNS_IP" ]; then
     echo -e "${RED}❌ Внимание: IP-адрес ($LOCAL_IP) не совпадает с A-записью $DOMAIN ($DNS_IP).${NC}"
     echo -e "${YEL}Правильно укажите одну A-запись для вашего домена в ДНС - $LOCAL_IP ${NC}"
     
-	read -p "Продолжить на ваш страх и риск? (y/N):" choice
+  read -p "Продолжить на ваш страх и риск? (y/N):" choice
 
-	if [[ ! "$choice" =~ ^[Yy]$ ]]; then
-		echo -e "${RED}Выполнение скрипта прервано.${NC}"
-		exit 1
-	fi
+  if [[ ! "$choice" =~ ^[Yy]$ ]]; then
+    echo -e "${RED}Выполнение скрипта прервано.${NC}"
+    exit 1
+  fi
     echo -e "${YEL}Продолжение выполнения скрипта...${NC}"
 fi
 
-
 # Включаем BBR
-bbr=$(sysctl -a | grep net.ipv4.tcp_congestion_control)
-if [ "$bbr" = "net.ipv4.tcp_congestion_control = bbr" ]; then
+bbr=$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null)
+if [ "$bbr" = "bbr" ]; then
     echo -e "${GRN}BBR уже запущен${NC}"
 else
     echo "net.core.default_qdisc=fq" > /etc/sysctl.d/999-autoXRAY.conf
@@ -119,44 +129,41 @@ else
 fi
 
 cat <<EOF > /etc/security/limits.d/99-autoXRAY.conf
-*               soft    nofile          65535
-*               hard    nofile          65535
-root            soft    nofile          65535
-root            hard    nofile          65535
+*       soft    nofile  1048576
+*       hard    nofile  1048576
+root    soft    nofile  1048576
+root    hard    nofile  1048576
 EOF
 ulimit -n 65535
 echo -e "${GRN}Лимиты применены. Текущий ulimit -n: $(ulimit -n) ${NC}"
 
-
-
 # Блок CERTBOT - START
-
 # Определяем путь к конфигу nginx
 if [ -f /etc/nginx/sites-available/default ]; then
     CONFIG_PATH="/etc/nginx/sites-available/default"
-	echo -e "${GRN}Обнаружена стандартная сборка nginx. ${NC}"
+  echo -e "${GRN}Обнаружена стандартная сборка nginx. ${NC}"
 elif [ -f /etc/nginx/conf.d/default.conf ]; then
     CONFIG_PATH="/etc/nginx/conf.d/default.conf"
-	echo -e "${YEL}Обнаружена нестандартная сборка nginx. Предварительная настройка NGINX для CERTBOT ${NC}"
-	mkdir -p /var/www/html
+  echo -e "${YEL}Обнаружена нестандартная сборка nginx. Предварительная настройка NGINX для CERTBOT ${NC}"
+  mkdir -p /var/www/html
 
 # Записываем временный конфиг
 cat <<EOF > "$CONFIG_PATH"
 server {
-	listen 80 default_server;
-	server_name _;
+  listen 80 default_server;
+  server_name _;
 
-	location /.well-known/acme-challenge/ {
-		root /var/www/html;
-		allow all;
-	}
+  location /.well-known/acme-challenge/ {
+    root /var/www/html;
+    allow all;
+  }
 
-	location / {
-		return 301 https://\$host\$request_uri;
-	}
+  location / {
+    return 301 https://\$host\$request_uri;
+  }
 }
 EOF
-	systemctl reload nginx
+  systemctl reload nginx
 else
     echo -e "${RED}Не найден ни один default конфиг nginx${NC}"
     exit 1
@@ -188,20 +195,22 @@ else
 fi
 # Блок CERTBOT - END
 
+path_subpage=$(openssl rand -base64 15 | tr -dc 'A-Za-z0-9' | head -c 20)
+
 # конфиг nginx
-bash -c "cat > $CONFIG_PATH" <<EOF
+cat <<EOF > "$CONFIG_PATH"
 server {
     server_name $DOMAIN;
-	listen unix:/dev/shm/nginx.sock ssl http2 proxy_protocol;	
+  listen unix:/dev/shm/nginx.sock ssl http2 proxy_protocol; 
     set_real_ip_from unix:;
     real_ip_header proxy_protocol;
-	
+  
     root /var/www/$DOMAIN;
     index index.php index.html;
-	
-	ssl_protocols TLSv1.2 TLSv1.3;
-	ssl_ciphers HIGH:!aNULL:!MD5;
-	ssl_prefer_server_ciphers on;
+  
+  ssl_protocols TLSv1.2 TLSv1.3;
+  ssl_ciphers HIGH:!aNULL:!MD5;
+  ssl_prefer_server_ciphers on;
 
     ssl_session_timeout 1d;
     ssl_session_cache shared:MozSSL:10m;
@@ -210,10 +219,12 @@ server {
     ssl_certificate "/etc/letsencrypt/live/$DOMAIN/fullchain.pem";
     ssl_certificate_key "/etc/letsencrypt/live/$DOMAIN/privkey.pem";
 
-	add_header profile-title "base64:YXV0b1hSQVk=";
-	add_header routing "happ://routing/onadd/eyJOYW1lIjoiYXV0b1hSQVkiLCJHbG9iYWxQcm94eSI6InRydWUiLCJSb3V0ZU9yZGVyIjoiYmxvY2stcHJveHktZGlyZWN0IiwiUmVtb3RlRE5TVHlwZSI6IkRvSCIsIlJlbW90ZUROU0RvbWFpbiI6Imh0dHBzOi8vZG5zLmdvb2dsZS9kbnMtcXVlcnkiLCJSZW1vdGVETlNJUCI6IjguOC40LjQiLCJEb21lc3RpY0ROU1R5cGUiOiJEb0giLCJEb21lc3RpY0ROU0RvbWFpbiI6Imh0dHBzOi8vY2xvdWRmbGFyZS1kbnMuY29tL2Rucy1xdWVyeSIsIkRvbWVzdGljRE5TSVAiOiIxLjEuMS4xIiwiR2VvaXB1cmwiOiJodHRwczovL2dpdGh1Yi5jb20vTG95YWxzb2xkaWVyL3YycmF5LXJ1bGVzLWRhdC9yZWxlYXNlcy9sYXRlc3QvZG93bmxvYWQvZ2VvaXAuZGF0IiwiR2Vvc2l0ZXVybCI6Imh0dHBzOi8vZ2l0aHViLmNvbS9Mb3lhbHNvbGRpZXIvdjJyYXktcnVsZXMtZGF0L3JlbGVhc2VzL2xhdGVzdC9kb3dubG9hZC9nZW9zaXRlLmRhdCIsIkxhc3RVcGRhdGVkIjoiMTc3NTIwNjEwOCIsIkRuc0hvc3RzIjp7fSwiRGlyZWN0U2l0ZXMiOlsiZ2Vvc2l0ZTpjYXRlZ29yeS1ydSIsImdlb3NpdGU6cHJpdmF0ZSJdLCJEaXJlY3RJcCI6WyJnZW9pcDpwcml2YXRlIl0sIlByb3h5U2l0ZXMiOltdLCJQcm94eUlwIjpbXSwiQmxvY2tTaXRlcyI6WyJnZW9zaXRlOmNhdGVnb3J5LWFkcyIsImdlb3NpdGU6d2luLXNweSJdLCJCbG9ja0lwIjpbXSwiRG9tYWluU3RyYXRlZ3kiOiJJUElmTm9uTWF0Y2giLCJGYWtlRE5TIjoiZmFsc2UiLCJVc2VDaHVua0ZpbGVzIjoiZmFsc2UifQ";
-	
+    location = /${path_subpage}.json {
+    add_header profile-title "base64:YXV0b1hSQVk=";
+    add_header routing "happ://routing/onadd/eyJOYW1lIjoiYXV0b1hSQVkiLCJHbG9iYWxQcm94eSI6InRydWUiLCJSb3V0ZU9yZGVyIjoiYmxvY2stcHJveHktZGlyZWN0IiwiUmVtb3RlRE5TVHlwZSI6IkRvSCIsIlJlbW90ZUROU0RvbWFpbiI6Imh0dHBzOi8vZG5zLmdvb2dsZS9kbnMtcXVlcnkiLCJSZW1vdGVETlNJUCI6IjguOC40LjQiLCJEb21lc3RpY0ROU1R5cGUiOiJEb0giLCJEb21lc3RpY0ROU0RvbWFpbiI6Imh0dHBzOi8vY2xvdWRmbGFyZS1kbnMuY29tL2Rucy1xdWVyeSIsIkRvbWVzdGljRE5TSVAiOiIxLjEuMS4xIiwiR2VvaXB1cmwiOiJodHRwczovL2dpdGh1Yi5jb20vTG95YWxzb2xkaWVyL3YycmF5LXJ1bGVzLWRhdC9yZWxlYXNlcy9sYXRlc3QvZG93bmxvYWQvZ2VvaXAuZGF0IiwiR2Vvc2l0ZXVybCI6Imh0dHBzOi8vZ2l0aHViLmNvbS9Mb3lhbHNvbGRpZXIvdjJyYXktcnVsZXMtZGF0L3JlbGVhc2VzL2xhdGVzdC9kb3dubG9hZC9nZW9zaXRlLmRhdCIsIkxhc3RVcGRhdGVkIjoiMTc3NTIwNjEwOCIsIkRuc0hvc3RzIjp7fSwiRGlyZWN0U2l0ZXMiOlsiZ2Vvc2l0ZTpjYXRlZ29yeS1ydSIsImdlb3NpdGU6cHJpdmF0ZSJdLCJEaXJlY3RJcCI6WyJnZW9pcDpwcml2YXRlIl0sIlByb3h5U2l0ZXMiOltdLCJQcm94eUlwIjpbXSwiQmxvY2tTaXRlcyI6WyJnZW9zaXRlOmNhdGVnb3J5LWFkcyIsImdlb3NpdGU6d2luLXNweSJdLCJCbG9ja0lwIjpbXSwiRG9tYWluU3RyYXRlZ3kiOiJJUElmTm9uTWF0Y2giLCJGYWtlRE5TIjoiZmFsc2UiLCJVc2VDaHVua0ZpbGVzIjoiZmFsc2UifQ";
+    
     add_header routing-enable 0;
+  }
 
     location ~ /\.ht {
         deny all;
@@ -229,74 +240,116 @@ server {
     }
 
     location / {
-		return 301 https://\$host\$request_uri;
+    return 301 https://\$host\$request_uri;
     }
 }
 EOF
 
 systemctl restart nginx
 
-echo -e "${GRN}✅ Конфигурация nginx обновлена.${NC}
-
-"
-
-
-
-
 # Создание директории
 WEB_PATH="/var/www/$DOMAIN"
 mkdir -p "$WEB_PATH"
 
 # Генерируем сайт маскировку
-bash -c "$(curl -L https://github.com/xVRVx/autoXRAY/raw/refs/heads/main/test/gen_page2.sh)" -- $WEB_PATH
+bash -c "$(curl -sL https://github.com/xVRVx/autoXRAY/raw/refs/heads/main/test/gen_page2.sh)" -- "$WEB_PATH"
 
 # Установка Xray
-bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install
+bash -c "$(curl -sL https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install
 
-
-# Определяем директорию скрипта
-#SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 SCRIPT_DIR=/usr/local/etc/xray
 
-# Генерируем переменные
-xray_uuid_vrv=$(xray uuid)
-domains=(www.theregister.com www.20minutes.fr www.dealabs.com www.manomano.fr www.caradisiac.com www.techadvisor.com www.computerworld.com teamdocs.su wikiportal.su docscenter.su www.bing.com github.com tradingview.com)
-xray_dest_vrv=${domains[$RANDOM % ${#domains[@]}]}
-xray_dest_vrv222=${domains[$RANDOM % ${#domains[@]}]}
-
+# Генерируем глобальные ключи для сервера-моста
 key_output=$(xray x25519)
 xray_privateKey_vrv=$(echo "$key_output" | awk -F': ' '/PrivateKey/ {print $2}')
 xray_publicKey_vrv=$(echo "$key_output" | awk -F': ' '/Password/ {print $2}')
-
-key_mldsa65=$(xray mldsa65)
-seed_mldsa65=$(echo "$key_mldsa65" | awk -F': ' '/Seed/ {print $2}')
-verify_mldsa65=$(echo "$key_mldsa65" | awk -F': ' '/Verify/ {print $2}')
-
 xray_shortIds_vrv=$(openssl rand -hex 8)
 
-xray_sspasw_vrv=$(openssl rand -base64 15 | tr -dc 'A-Za-z0-9' | head -c 20)
-
-path_subpage=$(openssl rand -base64 40 | tr -dc 'A-Za-z0-9' | head -c 40)
-
 path_xhttp=$(openssl rand -base64 15 | tr -dc 'a-z0-9' | head -c 6)
-
-# ipserv=$(hostname -I | awk '{print $1}')
 
 socksUser=$(openssl rand -base64 16 | tr -dc 'A-Za-z0-9' | head -c 6)
 socksPasw=$(openssl rand -base64 32 | tr -dc 'A-Za-z0-9' | head -c 16)
 
+# ====СОЗДАНИЕ КОНФИГА СЕРВЕРА В ЦИКЛЕ ====
 
-# Экспортируем переменные для envsubst
-export xray_uuid_vrv xray_dest_vrv xray_dest_vrv222 xray_privateKey_vrv xray_publicKey_vrv xray_shortIds_vrv xray_sspasw_vrv DOMAIN path_subpage WEB_PATH TYPE FP SNI SPX PBK SECURITY FLOW SID mode uuidVL addressVL portVL path_xhttp path_url extra socksUser socksPasw
+ROUTING_RULES=""
+OUTBOUNDS=""
+
+for (( i=0; i<COUNT; i++ )); do
+    ROUTE_ID=$((i + 1))
+
+    # Наполняем правила маршрутизации с использованием vlessRoute (проверка 7 и 8 байта UUID)
+    ROUTING_RULES+="$(cat <<EOF
+      { "vlessRoute": "$ROUTE_ID", "outboundTag": "proxy-$i" },
+EOF
+)"
+
+    # Если параметр extra пустой, подставляем null
+    EXTRA_VAL="${NODE_EXTRA[$i]}"
+    if [ -z "$EXTRA_VAL" ]; then EXTRA_VAL="null"; fi
+
+    # Наполняем outbounds (к конечным EU нодам) — используем ИХ родные порты
+    OUTBOUNDS+="$(cat <<EOF
+    {
+      "mux": { "concurrency": -1, "enabled": false },
+      "tag": "proxy-$i",
+      "protocol": "vless",
+      "settings": {
+        "vnext":[
+          {
+            "port": ${NODE_PORT[$i]},
+            "users":[ { "id": "${NODE_UUID[$i]}", "encryption": "none" } ],
+            "address": "${NODE_ADDR[$i]}"
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "${NODE_TYPE[$i]}",
+        "xhttpSettings": {
+          "extra": $EXTRA_VAL,
+          "mode": "${NODE_MODE[$i]}",
+          "path": "${NODE_PATH[$i]}"
+        },
+        "security": "${NODE_SEC[$i]}",
+        "realitySettings": {
+          "show": false,
+          "fingerprint": "${NODE_FP[$i]}",
+          "serverName": "${NODE_SNI[$i]}",
+          "password": "${NODE_PBK[$i]}",
+          "shortId": "${NODE_SID[$i]}",
+          "mldsa65Verify": "",
+          "spiderX": "${NODE_SPX[$i]}"
+        }
+      }
+    },
+EOF
+)"
+done
+
+# Удаляем запятую в конце
+ROUTING_RULES="${ROUTING_RULES%,}"
+
 
 # Создаем JSON конфигурацию сервера
-cat << 'EOF' | envsubst > "$SCRIPT_DIR/config.json"
+cat << EOF > "$SCRIPT_DIR/config.json"
 {
   "log": {
     "dnsLog": false,
     "access": "/var/log/xray/access.log",
     "error": "/var/log/xray/error.log",
     "loglevel": "none"
+  },
+  "burstObservatory": {
+    "pingConfig": {
+      "timeout": "3s",
+      "interval": "40s",
+      "sampling": 1,
+      "destination": "https://www.gstatic.com/generate_204",
+      "connectivity": ""
+    },
+    "subjectSelector": [
+      "proxy"
+    ]
   },
   "dns": {
     "servers": [
@@ -308,16 +361,16 @@ cat << 'EOF' | envsubst > "$SCRIPT_DIR/config.json"
     "queryStrategy": "UseIPv4"
   },
   "inbounds": [
-	{
+    {
       "tag": "RUbrEUraw",
-      "port": ${portVL},
+      "port": 443,
       "listen": "0.0.0.0",
       "protocol": "vless",
       "settings": {
         "clients": [
           {
             "flow": "xtls-rprx-vision",
-            "id": "${xray_uuid_vrv}"
+            "id": "$SERVER_UUID"
           }
         ],
         "decryption": "none",
@@ -339,28 +392,21 @@ cat << 'EOF' | envsubst > "$SCRIPT_DIR/config.json"
       "streamSettings": {
         "network": "raw",
         "security": "reality",
+        "sockopt": {
+          "acceptProxyProtocol": false
+        },
         "realitySettings": {
           "show": false,
           "xver": 2,
-          "target": "/dev/shm/nginx.sock",
+          "target": "127.0.0.1:500",
           "spiderX": "/",
           "shortIds": [
-            "${xray_shortIds_vrv}"
+            "$xray_shortIds_vrv"
           ],
-          "privateKey": "${xray_privateKey_vrv}",
+          "privateKey": "$xray_privateKey_vrv",
           "serverNames": [
             "$DOMAIN"
-          ],
-          "limitFallbackUpload": {
-            "afterBytes": 0,
-            "bytesPerSec": 65536,
-            "burstBytesPerSec": 0
-          },
-          "limitFallbackDownload": {
-            "afterBytes": 5242880,
-            "bytesPerSec": 262144,
-            "burstBytesPerSec": 2097152
-          }
+          ]
         }
       }
     },
@@ -372,7 +418,7 @@ cat << 'EOF' | envsubst > "$SCRIPT_DIR/config.json"
       "settings": {
         "clients": [
           {
-            "id": "${xray_uuid_vrv}"
+            "id": "$SERVER_UUID"
           }
         ],
         "decryption": "none"
@@ -388,8 +434,8 @@ cat << 'EOF' | envsubst > "$SCRIPT_DIR/config.json"
       "streamSettings": {
         "network": "xhttp",
         "xhttpSettings": {
-          "mode": "${mode}",
-		  "path": "/${path_xhttp}",
+          "mode": "stream-one",
+          "path": "/$path_xhttp",
           "acceptProxyProtocol": false
         },
         "security": "none",
@@ -398,7 +444,7 @@ cat << 'EOF' | envsubst > "$SCRIPT_DIR/config.json"
         }
       }
     },
-	{
+    {
       "tag": "RUsocks5",
       "port": 10443,
       "listen": "0.0.0.0",
@@ -409,55 +455,15 @@ cat << 'EOF' | envsubst > "$SCRIPT_DIR/config.json"
         "auth": "password",
         "accounts": [
           {
-			"user": "${socksUser}",
-            "pass": "${socksPasw}"
-            
+            "user": "$socksUser",
+            "pass": "$socksPasw"
           }
         ]
       }
     }
   ],
   "outbounds": [
-    {
-      "mux": {
-        "concurrency": -1,
-        "enabled": false
-      },
-      "tag": "proxy",
-      "protocol": "vless",
-      "settings": {
-        "vnext": [
-          {
-            "port": ${portVL},
-            "users": [
-              {
-                "id": "$uuidVL",
-                "encryption": "none"
-              }
-            ],
-            "address": "$addressVL"
-          }
-        ]
-      },
-      "streamSettings": {
-        "network": "$TYPE",
-        "xhttpSettings": {
-         "extra": ${extra},
-          "mode": "${mode}",
-		  "path": "${path_url}"
-        },
-        "security": "$SECURITY",
-        "realitySettings": {
-          "show": false,
-          "fingerprint": "$FP",
-          "serverName": "$SNI",
-		  "password": "$PBK",
-		  "shortId": "$SID",
-		  "mldsa65Verify": "",
-		  "spiderX": "$SPX"
-        }
-      }
-    },
+$OUTBOUNDS
     {
       "tag": "direct",
       "protocol": "freedom",
@@ -471,6 +477,28 @@ cat << 'EOF' | envsubst > "$SCRIPT_DIR/config.json"
     }
   ],
   "routing": {
+    "domainMatcher": "hybrid",
+    "domainStrategy": "IPIfNonMatch",
+    "balancers": [
+      {
+        "tag": "Super_Balancer",
+        "selector": [
+          "proxy"
+        ],
+        "strategy": {
+          "type": "leastLoad",
+          "settings": {
+            "maxRTT": "1s",
+            "expected": $COUNT,
+            "baselines": [
+              "1s"
+            ],
+            "tolerance": 0.01
+          }
+        },
+        "fallbackTag": "direct"
+      }
+    ],
     "rules": [
       {
         "ip": [
@@ -478,7 +506,7 @@ cat << 'EOF' | envsubst > "$SCRIPT_DIR/config.json"
         ],
         "outboundTag": "block"
       },
-	  {
+      {
         "port": "25",
         "outboundTag": "block"
       },
@@ -499,13 +527,13 @@ cat << 'EOF' | envsubst > "$SCRIPT_DIR/config.json"
       {
         "domain": [
           "habr.com",
-		  "apkmirror.com",
+          "apkmirror.com",
           "ifconfig.me",
           "checkip.amazonaws.com",
           "pify.org",
           "geosite:category-ip-geo-detect"
         ],
-        "outboundTag": "proxy"
+        "balancerTag": "Super_Balancer"
       },
       {
         "domain": [
@@ -529,61 +557,64 @@ cat << 'EOF' | envsubst > "$SCRIPT_DIR/config.json"
       },
       {
         "inboundTag": [
-          "RUbrEUraw","RUbrEUxhttp","RUsocks5"
+          "RUsocks5"
         ],
-        "outboundTag": "proxy"
-      }
-    ],
-    "domainStrategy": "IPIfNonMatch"
+        "balancerTag": "Super_Balancer"
+      },
+$ROUTING_RULES
+    ]
   }
 }
-
 EOF
 
 # Создаем JSON конфигурацию клиента
-cat << 'EOF' | envsubst > "$WEB_PATH/$path_subpage.json"
-[
+print_config() {
+  local PROXY_OUTBOUND="$1"
+  local REMARK="$2"
+
+  cat << TPL
 {
   "log": {
     "loglevel": "warning"
   },
   "dns": {
-    "servers": [
-	  "https://8.8.4.4/dns-query",
-	  "https://8.8.8.8/dns-query",
-	  "https://1.1.1.1/dns-query"
+    "servers":[
+      "https://8.8.4.4/dns-query",
+      "https://8.8.8.8/dns-query",
+      "https://1.1.1.1/dns-query"
     ],
     "queryStrategy": "UseIPv4"
   },
   "routing": {
+    "domainMatcher": "hybrid",
     "domainStrategy": "IPIfNonMatch",
-    "rules": [
+    "rules":[
       {
-        "domain": [
+        "domain":[
           "geosite:category-ads",
           "geosite:win-spy"
         ],
         "outboundTag": "block"
       },
       {
-        "protocol": [
+        "protocol":[
           "bittorrent"
         ],
         "outboundTag": "direct"
       },
       {
-        "domain": [
+        "domain":[
           "habr.com", "apkmirror.com"
         ],
         "outboundTag": "proxy"
       },
       {
-        "domain": [
+        "domain":[
           "geosite:private",
           "ifconfig.me",
           "checkip.amazonaws.com",
           "pify.org",
-		  "geosite:category-ip-geo-detect",
+      "geosite:category-ip-geo-detect",
           "geosite:apple",
           "geosite:apple-pki",
           "geosite:huawei",
@@ -602,14 +633,14 @@ cat << 'EOF' | envsubst > "$WEB_PATH/$path_subpage.json"
         "outboundTag": "direct"
       },
       {
-        "ip": [
+        "ip":[
           "geoip:private"
         ],
         "outboundTag": "direct"
       }
     ]
   },
-  "inbounds": [
+  "inbounds":[
     {
       "tag": "socks-in",
       "protocol": "socks",
@@ -620,11 +651,7 @@ cat << 'EOF' | envsubst > "$WEB_PATH/$path_subpage.json"
       },
       "sniffing": {
         "enabled": true,
-        "destOverride": [
-          "http",
-          "tls",
-          "quic"
-        ]
+        "destOverride":[ "http", "tls", "quic" ]
       }
     },
     {
@@ -637,11 +664,7 @@ cat << 'EOF' | envsubst > "$WEB_PATH/$path_subpage.json"
       },
       "sniffing": {
         "enabled": true,
-        "destOverride": [
-          "http",
-          "tls",
-          "quic"
-        ]
+        "destOverride":[ "http", "tls", "quic" ]
       }
     },
     {
@@ -651,55 +674,12 @@ cat << 'EOF' | envsubst > "$WEB_PATH/$path_subpage.json"
       "port": 10809,
       "sniffing": {
         "enabled": true,
-        "destOverride": [
-          "http",
-          "tls",
-          "quic"
-        ]
+        "destOverride":[ "http", "tls", "quic" ]
       }
     }
   ],
-  "outbounds": [
-    {
-      "mux": {
-        "concurrency": -1,
-        "enabled": false
-      },
-      "tag": "proxy",
-      "protocol": "vless",
-      "settings": {
-        "vnext": [
-          {
-            "address": "$DOMAIN",
-            "port": ${portVL},
-            "users": [
-              {
-                "id": "${xray_uuid_vrv}",
-                "encryption": "none"
-              }
-            ]
-          }
-        ]
-      },
-      "streamSettings": {
-        "network": "$TYPE",
-        "xhttpSettings": {
-         "extra": ${extra},
-          "mode": "${mode}",
-		  "path": "/${path_xhttp}"
-        },
-        "security": "reality",
-        "realitySettings": {
-          "show": false,
-          "fingerprint": "chrome",
-          "serverName": "$DOMAIN",
-          "password": "${xray_publicKey_vrv}",
-          "shortId": "${xray_shortIds_vrv}",
-          "mldsa65Verify": "",
-          "spiderX": "/"
-        }
-      }
-    },
+  "outbounds":[
+$PROXY_OUTBOUND,
     {
       "tag": "direct",
       "protocol": "freedom"
@@ -709,211 +689,165 @@ cat << 'EOF' | envsubst > "$WEB_PATH/$path_subpage.json"
       "protocol": "blackhole"
     }
   ],
-  "remarks": "🇷🇺 Bridge RU-EU vlsXHTTPrty"
-},
-{
-  "log": {
-    "loglevel": "warning"
-  },
-  "dns": {
-    "servers": [
-	  "https://8.8.4.4/dns-query",
-	  "https://8.8.8.8/dns-query",
-	  "https://1.1.1.1/dns-query"
-    ],
-    "queryStrategy": "UseIPv4"
-  },
-  "routing": {
-    "domainStrategy": "IPIfNonMatch",
-    "rules": [
-      {
-        "domain": [
-          "geosite:category-ads",
-          "geosite:win-spy"
-        ],
-        "outboundTag": "block"
-      },
-      {
-        "protocol": [
-          "bittorrent"
-        ],
-        "outboundTag": "direct"
-      },
-      {
-        "domain": [
-          "habr.com", "apkmirror.com"
-        ],
-        "outboundTag": "proxy"
-      },
-      {
-        "domain": [
-          "geosite:private",
-          "ifconfig.me",
-          "checkip.amazonaws.com",
-          "pify.org",
-		  "geosite:category-ip-geo-detect",
-          "geosite:apple",
-          "geosite:apple-pki",
-          "geosite:huawei",
-          "geosite:xiaomi",
-          "geosite:category-android-app-download",
-          "geosite:f-droid",
-          "geosite:yandex",
-          "geosite:vk",
-          "geosite:microsoft",
-          "geosite:win-update",
-          "geosite:win-extra",
-          "geosite:google-play",
-          "geosite:steam",
-          "geosite:category-ru"
-        ],
-        "outboundTag": "direct"
-      },
-      {
-        "ip": [
-          "geoip:private"
-        ],
-        "outboundTag": "direct"
-      }
-    ]
-  },
-  "inbounds": [
+  "remarks": "$REMARK"
+}
+TPL
+}
+
+CLIENT_CONFIGS=""
+declare -a CONFIGS_ARRAY
+ALL_LINKS_TEXT=""
+
+# Цикл генерации клиентов по каждой ссылке
+for (( i=0; i<COUNT; i++ )); do
+    REMARK_BASE="${NODE_NAME[$i]}"
+    if [ -z "$REMARK_BASE" ]; then REMARK_BASE="Node_$i"; fi
+
+    # --- Config: Bridge XHTTP (идет на мост, порт $SERVER_PORT) ---
+    OUT_REALITY_XHTTP=$(cat <<EOF
     {
-      "tag": "socks-in",
-      "protocol": "socks",
-      "listen": "127.0.0.1",
-      "port": 10808,
-      "settings": {
-        "udp": true
-      },
-      "sniffing": {
-        "enabled": true,
-        "destOverride": [
-          "http",
-          "tls",
-          "quic"
-        ]
-      }
-    },
-    {
-      "tag": "socks-sb",
-      "protocol": "socks",
-      "listen": "127.0.0.1",
-      "port": 2080,
-      "settings": {
-        "udp": true
-      },
-      "sniffing": {
-        "enabled": true,
-        "destOverride": [
-          "http",
-          "tls",
-          "quic"
-        ]
-      }
-    },
-    {
-      "tag": "http-in",
-      "protocol": "http",
-      "listen": "127.0.0.1",
-      "port": 10809,
-      "sniffing": {
-        "enabled": true,
-        "destOverride": [
-          "http",
-          "tls",
-          "quic"
-        ]
-      }
-    }
-  ],
-  "outbounds": [
-    {
-      "mux": {
-        "concurrency": -1,
-        "enabled": false
-      },
+      "mux": { "concurrency": -1, "enabled": false },
       "tag": "proxy",
       "protocol": "vless",
       "settings": {
-        "vnext": [
-          {
-            "address": "$DOMAIN",
-            "port": ${portVL},
-            "users": [
-              {
-                "id": "${xray_uuid_vrv}",
-                "flow": "xtls-rprx-vision",
-                "encryption": "none"
-              }
-            ]
+        "vnext":[{
+          "address": "$DOMAIN",
+          "port": $SERVER_PORT,
+          "users":[{ "id": "${BRIDGE_UUID[$i]}", "encryption": "none" }]
+        }]
+      },
+      "streamSettings": {
+        "network": "xhttp",
+        "security": "reality",
+        "xhttpSettings": {
+          "mode": "stream-one",
+          "path": "/$path_xhttp",
+          "extra": {
+            "noGRPCHeader": false,
+            "scMaxEachPostBytes": 1500000,
+            "scMinPostsIntervalMs": 20,
+            "scStreamUpServerSecs": "60-240",
+            "xPaddingBytes": "400-800",
+            "xmux": {
+              "cMaxReuseTimes": "1000-3000",
+              "hKeepAlivePeriod": 0,
+              "hMaxRequestTimes": "400-700",
+              "hMaxReusableSecs": "1200-1800",
+              "maxConcurrency": "3-5",
+              "maxConnections": 0
+            }
           }
-        ]
+        },
+        "realitySettings": {
+          "show": false, "fingerprint": "chrome", "serverName": "$DOMAIN",
+          "password": "$xray_publicKey_vrv", "shortId": "$xray_shortIds_vrv", "spiderX": "/"
+        }
+      }
+    }
+EOF
+)
+
+    # --- Config: Bridge RAW Vision (идет на мост, порт $SERVER_PORT) ---
+    OUT_REALITY_VISION=$(cat <<EOF
+    {
+      "mux": { "concurrency": -1, "enabled": false },
+      "tag": "proxy",
+      "protocol": "vless",
+      "settings": {
+        "vnext":[{
+          "address": "$DOMAIN",
+          "port": $SERVER_PORT,
+          "users":[{ "id": "${BRIDGE_UUID[$i]}", "flow": "xtls-rprx-vision", "encryption": "none" }]
+        }]
       },
       "streamSettings": {
         "network": "raw",
         "security": "reality",
         "realitySettings": {
-          "show": false,
-          "fingerprint": "chrome",
-          "serverName": "$DOMAIN",
-          "password": "${xray_publicKey_vrv}",
-          "shortId": "${xray_shortIds_vrv}",
-          "mldsa65Verify": "",
-          "spiderX": "/"
+          "show": false, "fingerprint": "chrome", "serverName": "$DOMAIN",
+          "password": "$xray_publicKey_vrv", "shortId": "$xray_shortIds_vrv", "spiderX": "/"
         }
       }
-    },
-    {
-      "tag": "direct",
-      "protocol": "freedom"
-    },
-    {
-      "tag": "block",
-      "protocol": "blackhole"
     }
-  ],
-  "remarks": "🇷🇺 Bridge RU-EU vlsRAWrtyXTLS"
-}
-]
 EOF
+)
+
+    EXTRA_VAL="${NODE_EXTRA[$i]}"
+    if [ -z "$EXTRA_VAL" ]; then EXTRA_VAL="null"; fi
+
+    # --- Config: Direct EU (идет напрямую на целевую ноду, её родной порт) ---
+    OUT_DIRECT_EU=$(cat <<EOF
+    {
+      "mux": { "concurrency": -1, "enabled": false },
+      "tag": "proxy",
+      "protocol": "vless",
+      "settings": {
+        "vnext":[{
+          "address": "${NODE_ADDR[$i]}",
+          "port": ${NODE_PORT[$i]},
+          "users":[{ "id": "${NODE_UUID[$i]}", "encryption": "none" }]
+        }]
+      },
+      "streamSettings": {
+        "network": "${NODE_TYPE[$i]}",
+        "xhttpSettings": {
+          "extra": $EXTRA_VAL,
+          "mode": "${NODE_MODE[$i]}",
+          "path": "${NODE_PATH[$i]}"
+        },
+        "security": "${NODE_SEC[$i]}",
+        "realitySettings": {
+          "show": false,
+          "fingerprint": "${NODE_FP[$i]}",
+          "serverName": "${NODE_SNI[$i]}",
+          "password": "${NODE_PBK[$i]}",
+          "shortId": "${NODE_SID[$i]}",
+          "mldsa65Verify": "",
+          "spiderX": "${NODE_SPX[$i]}"
+        }
+      }
+    }
+EOF
+)
+
+    # Генерируем 3 конфига на ноду и склеиваем в массив JSON
+    CLIENT_CONFIGS+="$(print_config "$OUT_REALITY_XHTTP" "🇷🇺 RU>EU xhttp | $REMARK_BASE")"
+    CLIENT_CONFIGS+=","
+    CLIENT_CONFIGS+="$(print_config "$OUT_REALITY_VISION" "🇷🇺 RU>EU raw | $REMARK_BASE")"
+    CLIENT_CONFIGS+=","
+    CLIENT_CONFIGS+="$(print_config "$OUT_DIRECT_EU" "🇪🇺 EU dir | $REMARK_BASE")"
+
+    if [ $i -lt $((COUNT-1)) ]; then
+        CLIENT_CONFIGS+=","
+    fi
+
+    # --- Генерируем ссылки vless:// для HTML странички (с портом моста) ---
+    link_xhttp="vless://${BRIDGE_UUID[$i]}@$DOMAIN:$SERVER_PORT?security=reality&type=xhttp&headerType=&path=%2F$path_xhttp&host=&mode=stream-one&extra=%7B%22xmux%22%3A%7B%22cMaxReuseTimes%22%3A%221000-3000%22%2C%22maxConcurrency%22%3A%223-5%22%2C%22maxConnections%22%3A0%2C%22hKeepAlivePeriod%22%3A0%2C%22hMaxRequestTimes%22%3A%22400-700%22%2C%22hMaxReusableSecs%22%3A%221200-1800%22%7D%2C%22headers%22%3A%7B%7D%2C%22noGRPCHeader%22%3Afalse%2C%22xPaddingBytes%22%3A%22400-800%22%2C%22scMaxEachPostBytes%22%3A1500000%2C%22scMinPostsIntervalMs%22%3A20%2C%22scStreamUpServerSecs%22%3A%2260-240%22%7D&sni=$DOMAIN&fp=chrome&pbk=${xray_publicKey_vrv}&sid=${xray_shortIds_vrv}&spx=%2F#RU%3EEU_xhttp_$REMARK_BASE"
+
+    link_raw="vless://${BRIDGE_UUID[$i]}@$DOMAIN:$SERVER_PORT?security=reality&type=tcp&headerType=&path=&host=&flow=xtls-rprx-vision&sni=$DOMAIN&fp=chrome&pbk=${xray_publicKey_vrv}&sid=${xray_shortIds_vrv}&spx=%2F#RU%3EEU_raw_$REMARK_BASE"
+
+    CONFIGS_ARRAY+=( "XHTTP (RU>EU $REMARK_BASE)|$link_xhttp" )
+    CONFIGS_ARRAY+=( "RAW VISION (RU>EU $REMARK_BASE)|$link_raw" )
+    CONFIGS_ARRAY+=( "Direct EU ($REMARK_BASE)|${VLESS_URLS[$i]}" )
+done
+
+# Записываем массив в файл подписки
+echo "[$CLIENT_CONFIGS]" > "$WEB_PATH/$path_subpage.json"
 
 systemctl restart xray
 echo -e "Перезапуск XRAY"
 
-# Формирование ссылок
 subPageLink="https://$DOMAIN/$path_subpage.json"
-sub2PageLink="https://$DOMAIN/$path_subpage"
-
-
-# Формирование ссылок
-link1="vless://${xray_uuid_vrv}@$DOMAIN:${portVL}?security=reality&type=xhttp&headerType=&path=%2F$path_xhttp&host=&mode=${mode}&extra=%7B%22xmux%22%3A%7B%22cMaxReuseTimes%22%3A%221000-3000%22%2C%22maxConcurrency%22%3A%223-5%22%2C%22maxConnections%22%3A0%2C%22hKeepAlivePeriod%22%3A0%2C%22hMaxRequestTimes%22%3A%22400-700%22%2C%22hMaxReusableSecs%22%3A%221200-1800%22%7D%2C%22headers%22%3A%7B%7D%2C%22noGRPCHeader%22%3Afalse%2C%22xPaddingBytes%22%3A%22400-800%22%2C%22scMaxEachPostBytes%22%3A1500000%2C%22scMinPostsIntervalMs%22%3A20%2C%22scStreamUpServerSecs%22%3A%2260-240%22%7D&sni=$DOMAIN&fp=chrome&pbk=${xray_publicKey_vrv}&sid=${xray_shortIds_vrv}&spx=%2F#Bridge RU-EU vlsXHTTPrty"
-
-link2="vless://${xray_uuid_vrv}@$DOMAIN:${portVL}?security=reality&type=tcp&headerType=&path=&host=&flow=xtls-rprx-vision&sni=$DOMAIN&fp=chrome&pbk=${xray_publicKey_vrv}&sid=${xray_shortIds_vrv}&spx=%2F#Bridge RU-EU vlsRAWrtyXTLS"
-
-
 configListLink="https://$DOMAIN/$path_subpage.html"
 
-{
-  echo "$link1"
-  echo "$link2"
-} > "$WEB_PATH/$path_subpage"
-
-CONFIGS_ARRAY=(
-    "VLESS XHTTP REALITY RUbrEU|$link1"
-    "VLESS RAW REALITY XTLS RUbrEU|$link2"
-)
-ALL_LINKS_TEXT=""
-
 echo -e "\n\n${GRN}Устанавливаем MTProto FakeTLS ${NC}"
-source <(curl -sL https://raw.githubusercontent.com/ekiskis/autoxray-test/refs/heads/main/telemt-test.sh)
+source <(curl -sL https://github.com/xVRVx/autoXRAY/raw/refs/heads/main/test/telemt-test.sh)
 
-
-# --- ЗАПИСЬ HEAD (СТАТИКА, МИНИФИЦИРОВАННЫЕ СТИЛИ И JS) ---
+echo -e "\n\n${GRN}Создаем страницу подписки ${NC}"
 cat > "$WEB_PATH/$path_subpage.html" <<'EOF'
 <!DOCTYPE html><html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
 <meta name="robots" content="noindex,nofollow">
-<title>Your bridge configs</title>
+<title>Bridge configs</title>
 <link rel="icon" type="image/svg+xml" href='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDBCRkZGIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PHBhdGggZD0iTTIxIDJsLTIgMm0tNy42MSA3LjYxYTUuNSA1LjUgMCAxIDEtNy43NzggNy43NzggNS41IDUuNSAwIDAgMSA3Ljc3Ny03Ljc3N3ptMCAwTDE1LjUgNy41bTAgMGwzIDNMMjIgN2wtMy0zbS0zLjUgMy41TDE5IDQiLz48L3N2Zz4='>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
@@ -925,7 +859,6 @@ function copyText(e,t){navigator.clipboard.writeText(document.getElementById(e).
 </head><body>
 EOF
 
-# --- ЗАПИСЬ BODY (ДИНАМИЧЕСКИЕ ДАННЫЕ) ---
 cat >> "$WEB_PATH/$path_subpage.html" <<EOF
 
 <h2>📂 Ссылка на подписку (готовый конфиг клиента с роутингом)</h2>
@@ -936,18 +869,17 @@ cat >> "$WEB_PATH/$path_subpage.html" <<EOF
     <button class="btn-action qr-btn" onclick="showQR('subLink')">QR</button>
 </div>
 
-<h2>📂 Ссылка на подписку (чистый vless для v2rayN и подобных)</h2>
-<div class="config-row">
-    <div class="config-label">Subscription</div>
-    <div class="config-code" id="subLinkVless">$sub2PageLink</div>
-    <button class="btn-action copy-btn" onclick="copyText('subLinkVless', this)">Copy</button>
-    <button class="btn-action qr-btn" onclick="showQR('subLinkVless')">QR</button>
+<h2>📱 Приложение HAPP (Windows/Android/iOS/MAC/Linux)</h2>
+<div class="btn-group">
+    <a href="happ://add/$subPageLink" class="btn">⚡ Add to HAPP</a>
+    <a href="https://www.happ.su/main/ru" target="_blank" class="btn download">⬇️ Download App</a>
 </div>
+<p>Маршрутизацию нужно выключить, она тут встроенная. По умолчанию она выключена - включается, если вы пользовались сторонними сервисами.</p>
 
-<h2>➡️ Конфиги</h2>
+<h2>➡️ Конфиги ($COUNT VPS x 3 протокола)</h2>
 EOF
 
-# Цикл генерации строк конфигов
+# Вывод строк конфигов
 idx=1
 for item in "${CONFIGS_ARRAY[@]}"; do
     title="${item%%|*}"
@@ -966,17 +898,19 @@ EOF
     ((idx++))
 done
 
-# Дописываем Socks5, telemt, All links и подвал
+SOCKS5_url="tg://socks?server=$DOMAIN&port=10443&user=${socksUser}&pass=${socksPasw}"
+
+# Дописываем Socks5, MTProto, All links и подвал
 cat >> "$WEB_PATH/$path_subpage.html" <<EOF
 <div class="config-row">
     <div class="config-label">Мост Socks5 (TG)</div>
-    <div class="config-code" id="sock">server=$DOMAIN port=10443 user=${socksUser} pass=${socksPasw}</div>
+    <div class="config-code" id="sock">${SOCKS5_url}</div>
     <button class="btn-action copy-btn" onclick="copyText('sock', this)">Copy</button>
-    <a href="https://t.me/socks?server=$DOMAIN&port=10443&user=${socksUser}&pass=${socksPasw}" target="_blank" class="btn-action qr-btn" title="автодобавление моста в тг" style="text-decoration:none">✈️ Add to TG</a>
+    <a href="${SOCKS5_url}" target="_blank" class="btn-action qr-btn" title="автодобавление моста в тг" style="text-decoration:none">✈️ Add to TG</a>
 </div>
 
 <div class="config-row">
-    <div class="config-label">MTProtoFakeTLS (TG)</div>
+    <div class="config-label">Мост MTProtoFakeTLS (TG)</div>
     <div class="config-code" id="mtproto">${MTProto}</div>
     <button class="btn-action copy-btn" onclick="copyText('mtproto', this)">Copy</button>
     <a href="${MTProto}" target="_blank" class="btn-action qr-btn" title="автодобавление моста в тг" style="text-decoration:none">✈️ Add to TG</a>
@@ -989,51 +923,6 @@ cat >> "$WEB_PATH/$path_subpage.html" <<EOF
     <button class="btn-action qr-btn" onclick="showQR('cAll')">QR</button>
 </div>
 
-<style>
-    .info-section {
-        background: #1e1e1e;
-        border: 1px dashed #555;
-        border-radius: 8px;
-        padding: 15px;
-        margin-top: 30px;
-        line-height: 1.6;
-        font-size: 13px;
-    }
-    .info-section h3 {
-        color: #82aaff;
-        margin-top: 0;
-        font-size: 16px;
-        border-bottom: 1px solid #333;
-        padding-bottom: 8px;
-    }
-    .info-list {
-        list-style: none;
-        padding: 0;
-        margin: 0;
-    }
-    .info-list li {
-        margin-bottom: 8px;
-    }
-    .info-list b {
-        color: #c3e88d;
-    }
-</style>
-
-<div class="info-section">
-    <h3>ℹ️ Описание конфигураций</h3>
-    <ul class="info-list">
-		<li>
-		<b>Bridge RU-EU vlsXHTTPrty</b> — Самый современный метод обхода блокировок. Использует новый транспорт <b>xhttp</b>, который маскирует трафик под обычное скачивание файлов или потоковое видео, делая его практически невидимым для систем анализа (DPI).
-		</li>
-		<li>
-		<b>Bridge RU-EU vlsRAWrtyXTLS</b> — Классический вариант с технологией <b>XTLS-Vision</b>. Это «золотой стандарт» по скорости: он идеально имитирует обычный просмотр сайтов через браузер Chrome, обеспечивая минимальные задержки при высокой защите.
-		</li>
-		<li>
-		<b>MTProtoFakeTLS (TG)</b> — прокси для телеграм. Пока крайне не рекомендуется использовать, так как MTProto-прокси легко распознается, что потенциально может внести сервер в "черный список"
-		</li>
-    </ul>
-</div>
-
 <div id="qrModal" class="modal-overlay"><div class="modal-content"><div id="qrcode"></div><button class="close-modal-btn" onclick="closeModal()">Close</button></div></div>
 </body></html>
 EOF
@@ -1041,47 +930,30 @@ EOF
 # --- ФИНАЛЬНАЯ ПРОВЕРКА ---
 echo -e "\n${YEL}=== Финальная проверка статусов ===${NC}"
 
-# Проверка Nginx
-if systemctl is-active --quiet nginx; then
-    echo -e "Nginx: ${GRN}RUNNING${NC}"
-else
-    echo -e "Nginx: ${RED}STOPPED/ERROR${NC}"
-fi
-
-# Проверка Telemt
 if systemctl is-active --quiet telemt; then echo -e "Telemt: ${GRN}RUNNING${NC}"; else echo -e "Telemt: ${RED}STOPPED/ERROR${NC}"; fi
-
-# Проверка XRAY
-if systemctl is-active --quiet xray; then
-    echo -e "XRAY: ${GRN}RUNNING${NC}"
-else
-    echo -e "XRAY: ${RED}STOPPED/ERROR${NC}"
-fi
-
+if systemctl is-active --quiet nginx; then echo -e "Nginx: ${GRN}RUNNING${NC}"; else echo -e "Nginx: ${RED}STOPPED/ERROR${NC}"; fi
+if systemctl is-active --quiet xray; then echo -e "XRAY: ${GRN}RUNNING${NC}"; else echo -e "XRAY: ${RED}STOPPED/ERROR${NC}"; fi
 
 echo -e "
-${YEL}VLESS XHTTP REALITY EXTRA (мост RU->EU) ${NC}
-$link1
-
-${YEL}VLESS RAW REALITY XTLS (мост RU->EU) ${NC}
-$link2
-
-${YEL}MTProto FakeTLS для ТГ${NC}
-$MTProto
+${YEL}✅ Сгенерировано мостов: ${GRN}$COUNT${NC}
 
 ${YEL}Ваша json страничка подписки ${NC}
-$subPageLink
+${GRN}$subPageLink${NC}
 
-${YEL}Ссылка на сохраненные конфиги ${NC}
+${YEL}Ссылка на сохраненные конфиги (Web UI) ${NC}
 ${GRN}$configListLink ${NC}
+
+${YEL}MTProto FakeTLS для ТГ${NC}
+${GRN}$MTProto ${NC}
 
 Скопируйте подписку в специализированное приложение:
 - iOS: Happ или v2RayTun или v2rayN
 - Android: Happ или v2RayTun или v2rayNG
 - Windows: конфиги Happ или winLoadXRAY или v2rayN
-	для vless v2RayTun или Throne
+  для vless v2RayTun или Throne
 
-Открыт локальный socks5 на порту 10808, 2080 и http на 10809.
+Открыт локальный socks5 на порту 10443.
+Внутри клиента: socks5 на 10808, 2080 и http на 10809.
 
 ${GRN}Поддержать автора оригинального скрипта: https://github.com/xVRVx/autoXRAY ${NC}
 
