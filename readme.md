@@ -1,7 +1,7 @@
 
 ## Рекомендованный скрипт
 ```
-bash -c "$(curl -L https://raw.githubusercontent.com/ekiskis/autoxray-test/refs/heads/main/autoxray.sh)" -- поддомен1.Домен.Ком
+bash -c "$(curl -L https://raw.githubusercontent.com/ekiskis/autoxray-test/refs/heads/main/autoxray-t.sh)" -- поддомен1.Домен.Ком
 ```
 Предоставлять ссылки на хостинг-провайдеров не буду, так как *** блокирует ip-адреса по /32
 
@@ -28,13 +28,28 @@ bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release
 
 После изменений ядро надо перезапустить: **systemctl restart xray**
 
-## Настраиваем мост RU -> EU
-Многие столкнулись с блокировками хостинг-сетей по TLS (особенно при использовании мобильного интернета). Существует решение — построение моста между серверами в разных локациях. Для этого необходимо:
+# Сборка с MTProto proxy FakeTLS для ТГ
 
-1) На заблокированный чистый VPS ставим стандартный рекомендованный скрипт и берем получившийся vless XHTTP reality EXTRA
-2) На ru VPS ставим новый скрипт (здесь нам понадобится vless XHTTP reality EXTRA):
-```bash
-bash -c "$(curl -L https://raw.githubusercontent.com/ekiskis/autoxray-test/main/autoxray-most.sh)" -- поддомен2.вашДОМЕН.com "vless://вашКонфигXHTTP"
+В связи с начавшейся блокировкой Telegram выпускаю новую сборку с MTProxy на порту 443 и маскировкой под собственный сайт на основе [Telemt](https://github.com/telemt/telemt/blob/main/docs/QUICK_START_GUIDE.ru.md).
+
+Всех дольше будут работать каскадные варианты подключения.
+
+**Для моста (ru/kz VPS)**
 ```
-Установится прокси мост между серверами, итоговая цепочка: конфиг клиента -> ru VPS -> eu VPS -> зарубежный сайт
+bash -c "$(curl -L https://raw.githubusercontent.com/ekiskis/autoxray-test/refs/heads/main/autoxray-most.sh)" -- поддомен2.Домен.Ком "vless://xhttp"
+```
+Также теперь можно использовать несколько xhttp конфигов, все они будут добавлены в мост.
 
+
+ -- поддомен2.Домен.Ком "vless://xhttp1" "vless://xhttp2" "vless://xhttp3"
+
+**Как удалить Telemt**
+```
+systemctl stop telemt; systemctl disable telemt; rm -f /etc/systemd/system/telemt.service /bin/telemt; systemctl daemon-reload
+```
+
+**Принцип работы**
+
+443 XRAY -> MTP TELEMT -> сайт заглушка
+
+Конфигурация: /etc/telemt/telemt.toml
