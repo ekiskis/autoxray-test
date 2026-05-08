@@ -279,8 +279,8 @@ cat << 'EOF' | envsubst > "$SCRIPT_DIR/config.json"
   "inbounds": [
 	{
       "tag": "vsRAWrtyVISION",
-      "port": 500,
-      "listen": "127.0.0.1",
+      "port": 443,
+      "listen": "0.0.0.0",
       "protocol": "vless",
       "settings": {
         "clients": [
