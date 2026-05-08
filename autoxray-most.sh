@@ -834,11 +834,18 @@ done
 # Записываем массив в файл подписки
 echo "[$CLIENT_CONFIGS]" > "$WEB_PATH/$path_subpage.json"
 
+{
+  echo "$link_xhttp"
+  echo "$link_raw"
+} > "$WEB_PATH/$path_subpage"
+
+
 systemctl restart xray
 echo -e "Перезапуск XRAY"
 
 subPageLink="https://$DOMAIN/$path_subpage.json"
 configListLink="https://$DOMAIN/$path_subpage.html"
+sub2PageLink="https://$DOMAIN/$path_subpage"
 
 echo -e "\n\n${GRN}Устанавливаем MTProto FakeTLS ${NC}"
 source <(curl -sL https://raw.githubusercontent.com/ekiskis/autoxray-test/refs/heads/main/telemt-test.sh)
@@ -867,6 +874,14 @@ cat >> "$WEB_PATH/$path_subpage.html" <<EOF
     <div class="config-code" id="subLink">$subPageLink</div>
     <button class="btn-action copy-btn" onclick="copyText('subLink', this)">Copy</button>
     <button class="btn-action qr-btn" onclick="showQR('subLink')">QR</button>
+</div>
+
+<h2>📂 Ссылка на подписку (чистый vless для v2rayN и подобных)</h2>
+<div class="config-row">
+    <div class="config-label">Subscription</div>
+    <div class="config-code" id="subLinkVless">$sub2PageLink</div>
+    <button class="btn-action copy-btn" onclick="copyText('subLinkVless', this)">Copy</button>
+    <button class="btn-action qr-btn" onclick="showQR('subLinkVless')">QR</button>
 </div>
 
 <h2>📱 Приложение HAPP (Windows/Android/iOS/MAC/Linux)</h2>
