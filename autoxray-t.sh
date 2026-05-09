@@ -929,11 +929,9 @@ linkTLS4="vless://${xray_uuid_vrv}@$DOMAIN:8443?security=tls&type=grpc&headerTyp
 
 configListLink="https://$DOMAIN/$path_subpage.html"
 
-sub2PageLink="https://$DOMAIN/$path_subpage_vless"
-
 path_subpage_vless=$path_subpage
 
-
+sub2PageLink="https://$DOMAIN/$path_subpage_vless"
 
 {
   echo "$linkRTY1"
